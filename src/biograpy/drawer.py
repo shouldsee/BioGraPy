@@ -238,7 +238,6 @@ class Panel(object):
                         axis_height = (float(track.drawn_lines)/self.drawn_lines)  - self.vpadding/(2.*len(self.tracks)) - default_figure_bottom_space/len(self.tracks)
                         axis_scale = axis_height / float(track.drawn_lines)
                 axis_bottom_pad -= (axis_height + self.vtrack_padding/2.)
-                print("axis ", [axis_left_pad, axis_bottom_pad*self.axisHeightScaling, axis_width, axis_height*self.axisHeightScaling] )
                 axis = matplotlib.pyplot.axes([axis_left_pad, axis_bottom_pad*self.axisHeightScaling, axis_width, axis_height*self.axisHeightScaling ],) 
                 matplotlib.pyplot.sca(axis)
                 self.track_axes.append(axis)
@@ -440,7 +439,6 @@ class Panel(object):
                 for feature in track.features:
                     self.Drawn_objects.append(feature)
                     for patch in feature.patches:
-                        print(patch)
                         if isinstance(patch, matplotlib.lines.Line2D):
                             axis.add_line(patch)
                         elif isinstance(patch, matplotlib.patches.Patch):
@@ -450,7 +448,6 @@ class Panel(object):
                         #patch.set_transform(axis.transData)# IMPORTANT WORKAROUND!!! if not manually set, transform is not passed correctly in Line2D objects
                                         
                     feature.draw_feat_name(ax=axis)
-                    print(axis)
                     for feat_name in feature.feat_name:
                         #feat_name.set_visible(True)
                         axis.add_artist(feat_name)

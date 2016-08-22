@@ -162,10 +162,9 @@ class BaseGraphicFeature(object):
         font_feat.set_family(set_family)
         font_feat.set_weight(set_weight)
         text_x = self.start
-        print(xoffset)
         if (self.start < xoffset) and (xoffset <= self.end):
             text_x+= xoffset
-        print("drawing feature name", self.name, (text_x, self.Y), (text_x, self.Y - self.height/5.), self.Y2)
+        #print("drawing feature name", self.name, (text_x, self.Y), (text_x, self.Y - self.height/5.), self.Y2)
         #self.feat_name = [ax.annotate(self.name, xy = (text_x, self.Y2), xytext = (text_x, self.Y2 - self.height/5.), fontproperties=font_feat, horizontalalignment=ha, verticalalignment=va)]
         #for fname in self.feat_name:
         #    fname.set_visible(False)
@@ -189,7 +188,6 @@ class Simple(BaseGraphicFeature):
         self.end = end
 
     def draw_feature(self):        
-        print("self.fc",self.fc)
         feat_draw=FancyBboxPatch((self.start,self.Y), 
                                   width=(self.end-self.start),
                                   height=self.height, 
@@ -290,7 +288,7 @@ class GeneSeqFeature(BaseGraphicFeature):
             head_width=self.height
         elif self.feature.strand==-1:
             arrow_start=self.end
-            arrow_direction=-self.end-self.start
+            arrow_direction=self.start-self.end
             shape='left'
             body_width=self.height*.6667
             head_width=self.height
@@ -656,9 +654,9 @@ class CoupledmRNAandCDS(BaseGraphicFeature):
         self.CDS=CDS
         self.ec=kwargs.get('ec','k')
         # Arrow head length
-        default_head_length = 2
-        if abs(self.end -  self.start<= 50):
-            default_head_length = (self.end-self.start)/(50/default_head_length)
+        default_head_length = 15
+        if abs(self.end -  self.start<= 100):
+            default_head_length = (self.end-self.start)/(100/default_head_length)
         self.head_length=kwargs.get('head_length',default_head_length)
 
 
@@ -704,8 +702,9 @@ class CoupledmRNAandCDS(BaseGraphicFeature):
                 body_width=self.height*1
                 head_width=self.height*1.5
             elif self.CDS.strand==-1:
+                print("strand -1 arrow")
                 arrow_start=self.CDS_end
-                arrow_direction=-self.CDS_end-self.CDS_start
+                arrow_direction=self.CDS_start-self.CDS_end
                 shape='left'
                 body_width=self.height*.6667
                 body_width=self.height*1
@@ -713,11 +712,12 @@ class CoupledmRNAandCDS(BaseGraphicFeature):
             else:
                 raise ValueError('Gene feature must have strand equal to 1 or -1')
             shape = 'full' # if we prefer a full arrow instead of half arrow head.
+            print("self.CDS_start", self.CDS_start, self.CDS_end)
             feat_draw=FancyArrow(arrow_start, self.Y + 0.5, dx=arrow_direction, dy=0, ec=self.ec,
                 fc=self.fc,alpha=self.alpha, width=body_width, head_length = self.head_length,
                 head_width=head_width,lw=self.lw,length_includes_head=True,
                 shape=shape, head_starts_at_zero=False)
-            print("head_width", head_width, self.height, "self.Y", self.Y, "body_width", body_width)
+            #print("head_width", head_width, self.height, "self.Y", self.Y, "body_width", body_width)
             self.patches.append(feat_draw)
 
             

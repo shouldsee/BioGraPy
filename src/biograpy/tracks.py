@@ -253,10 +253,9 @@ class BaseTrack(object):
 
                 ''' Check for collisions both on text and patches'''
                 if feat_numb not in draw_features:
-                    print("feat_numb",feat_numb)
                     draw=True
                     for prev_start,prev_end in line_controller:
-                        print("line_controller",prev_start, prev_end, size_memory[feat_numb])
+                        #print("line_controller",prev_start, prev_end, size_memory[feat_numb])
                         if  (prev_start <= size_memory[feat_numb]['left_margin'] <= prev_end) or \
                             (prev_start <= size_memory[feat_numb]['right_margin'] <= prev_end) or \
                             ((size_memory[feat_numb]['left_margin'] < prev_start < size_memory[feat_numb]['right_margin']) and \
@@ -294,7 +293,7 @@ class BaseTrack(object):
                             feat2draw.Y2 = (y + self.Ycord)
                             #current_x, current_y = fname.xyann
                             #feat2draw.feat_name[iname].xytext = (current_x, current_y + self.Ycord)
-                            print("feat_name ",fname,"y",y,"new y",fname.get_position()[1])
+                            #print("feat_name ",fname,"y",y,"new y",fname.get_position()[1])
                         draw_features.append(feat_numb)
                         
             #if len(draw_features) < len(self.features):
