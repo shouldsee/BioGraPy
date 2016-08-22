@@ -65,6 +65,7 @@ class Panel(object):
 
     def __init__(self,  fig=None, fig_width=1500, fig_height=None, fig_dpi=80, **kwargs):
         """ """        
+        self.line_aspect_ratio = 20.
         self.fig_width = fig_width / float(fig_dpi)
         # fig_height are handled by matplotlib in inches not pixel
         if fig_height:
@@ -141,7 +142,7 @@ class Panel(object):
 
     def _estimate_fig_height(self,):
         # the denominator is the aspect ratio of a single track
-        return self.drawn_lines*self.fig_width/30.
+        return self.drawn_lines*self.fig_width/self.line_aspect_ratio
 
     def _draw_tracks(self, **kwargs):
         '''create an axis for each track and moves
@@ -237,6 +238,7 @@ class Panel(object):
                         axis_height = (float(track.drawn_lines)/self.drawn_lines)  - self.vpadding/(2.*len(self.tracks)) - default_figure_bottom_space/len(self.tracks)
                         axis_scale = axis_height / float(track.drawn_lines)
                 axis_bottom_pad -= (axis_height + self.vtrack_padding/2.)
+                print("axis ", [axis_left_pad, axis_bottom_pad*self.axisHeightScaling, axis_width, axis_height*self.axisHeightScaling] )
                 axis = matplotlib.pyplot.axes([axis_left_pad, axis_bottom_pad*self.axisHeightScaling, axis_width, axis_height*self.axisHeightScaling ],) 
                 matplotlib.pyplot.sca(axis)
                 self.track_axes.append(axis)
@@ -448,10 +450,10 @@ class Panel(object):
                         #patch.set_transform(axis.transData)# IMPORTANT WORKAROUND!!! if not manually set, transform is not passed correctly in Line2D objects
                                         
                     feature.draw_feat_name(ax=axis)
+                    print(axis)
                     for feat_name in feature.feat_name:
-                        print(feat_name)
-                        feat_name.set_visible(True)
-                        #axis.add_artist(feat_name)
+                        #feat_name.set_visible(True)
+                        axis.add_artist(feat_name)
 
                 if track.draw_cb:
                     cb_axis = matplotlib.pyplot.axes([axis_left_pad + axis_width + cbar_axis_space - cbar_right_pad ,axis_bottom_pad, cbar_extent, axis_height ],) 

@@ -126,6 +126,7 @@ class BaseGraphicFeature(object):
         self.alpha=kwargs.get('alpha',.8)
         self.boxstyle=kwargs.get('boxstyle','square, pad=0.')
         self.Y=0.0
+        self.Y2=0.0
         self.patches = [] # all the patches must be returned inside this list
         self.feat_name= [] # all the patches labels must be returned inside this list
         self.norm = kwargs.get('norm', None)
@@ -164,11 +165,11 @@ class BaseGraphicFeature(object):
         print(xoffset)
         if (self.start < xoffset) and (xoffset <= self.end):
             text_x+= xoffset
-        print("drawing feature name", self.name)
-        self.feat_name = [ax.annotate(self.name, xy = (text_x, self.Y), xytext = (text_x, self.Y - self.height/5.), fontproperties=font_feat, horizontalalignment=ha, verticalalignment=va)]
-        for fname in self.feat_name:
-            fname.set_visible(False)
-        #self.feat_name = [Text(x=text_x, y=self.Y, text=self.name, fontproperties=font_feat, horizontalalignment=ha, verticalalignment=va)]
+        print("drawing feature name", self.name, (text_x, self.Y), (text_x, self.Y - self.height/5.), self.Y2)
+        #self.feat_name = [ax.annotate(self.name, xy = (text_x, self.Y2), xytext = (text_x, self.Y2 - self.height/5.), fontproperties=font_feat, horizontalalignment=ha, verticalalignment=va)]
+        #for fname in self.feat_name:
+        #    fname.set_visible(False)
+        self.feat_name = [Text(x=text_x, y=self.Y2, text=self.name, fontproperties=font_feat, horizontalalignment=ha, verticalalignment=va)]
 
         
 class Simple(BaseGraphicFeature):
@@ -188,6 +189,7 @@ class Simple(BaseGraphicFeature):
         self.end = end
 
     def draw_feature(self):        
+        print("self.fc",self.fc)
         feat_draw=FancyBboxPatch((self.start,self.Y), 
                                   width=(self.end-self.start),
                                   height=self.height, 
@@ -269,7 +271,7 @@ class GeneSeqFeature(BaseGraphicFeature):
         self.height=kwargs.get('height',2.)
         self.start=kwargs.get('start',min([feature.location.start.position,feature.location.end.position]))
         self.end=kwargs.get('end',max([feature.location.start.position,feature.location.end.position]))
-        default_head_length = 10
+        default_head_length = 5
         if abs(self.end -  self.start<= 50):
             default_head_length = (self.end-self.start)/10.
         self.head_length=kwargs.get('head_length',default_head_length)
@@ -653,6 +655,11 @@ class CoupledmRNAandCDS(BaseGraphicFeature):
         self.mRNA=mRNA
         self.CDS=CDS
         self.ec=kwargs.get('ec','k')
+        # Arrow head length
+        default_head_length = 2
+        if abs(self.end -  self.start<= 50):
+            default_head_length = (self.end-self.start)/(50/default_head_length)
+        self.head_length=kwargs.get('head_length',default_head_length)
 
 
     def draw_feature(self):
@@ -663,7 +670,7 @@ class CoupledmRNAandCDS(BaseGraphicFeature):
                 self.mRNA.sub_features.reverse()
             for sub_feature in self.mRNA.sub_features:
                 if sub_feature.location_operator=='join':
-                    feat_draw=FancyBboxPatch((int(sub_feature.location.start.position),self.Y), width=(int(sub_feature.location.end.position)-int(sub_feature.location.start.position)), height=self.height, boxstyle=self.boxstyle,lw=self.lw, ec=self.ec, fc=self.fc,alpha=self.alpha-0.5, url = self.url,)
+                    feat_draw=FancyBboxPatch((int(sub_feature.location.start.position),self.Y), width=(int(sub_feature.location.end.position)-int(sub_feature.location.start.position)), height=self.height, boxstyle=self.boxstyle,lw=self.lw, ec=self.ec, fc=self.fc,alpha=self.alpha-0.7, url = self.url,)
                     self.patches.append(feat_draw)
                     if junction_start:
                         junction_end=float(sub_feature.location.start.position)
@@ -674,7 +681,7 @@ class CoupledmRNAandCDS(BaseGraphicFeature):
                         self.patches.extend(join)
                     junction_start=float(sub_feature.location.end.position)
         else:#if SegmentedSeqFeature is called whihout subfeatures returns a GenericSeqFeature
-            feat_draw=FancyBboxPatch((self.mRNA_start,self.Y), width=(self.mRNA_end-self.mRNA_start), height=self.height, boxstyle=self.boxstyle, lw=self.lw, ec=self.ec, fc=self.fc,alpha=self.alpha, url = self.url,)
+            feat_draw=FancyBboxPatch((self.mRNA_start,self.Y), width=(self.mRNA_end-self.mRNA_start), height=self.height, boxstyle=self.boxstyle, lw=self.lw, ec=self.ec, fc=self.fc,alpha=self.alpha-0.5, url = self.url,)
             self.patches.append(feat_draw)
         #draw CDS
         if len(self.CDS.sub_features):
@@ -686,9 +693,33 @@ class CoupledmRNAandCDS(BaseGraphicFeature):
                     feat_draw=FancyBboxPatch((int(sub_feature.location.start.position),self.Y), width=(int(sub_feature.location.end.position)-int(sub_feature.location.start.position)), height=self.height, boxstyle=self.boxstyle,lw=0, ec=self.ec, fc=self.fc,alpha=self.alpha,)
                     self.patches.append(feat_draw)
         else:#if SegmentedSeqFeature is called whihout subfeatures returns a GenericSeqFeature
-            feat_draw=FancyBboxPatch((self.CDS_start,self.Y), width=(self.CDS_end-self.CDS_start), height=self.height, boxstyle=self.boxstyle, lw=self.lw, ec=self.ec, fc=self.fc,alpha=self.alpha,)
+            #feat_draw=FancyBboxPatch((self.CDS_start,self.Y), width=(self.CDS_end-self.CDS_start), height=self.height, boxstyle=self.boxstyle, lw=self.lw, ec=self.ec, fc=self.fc,alpha=self.alpha,)
+            
+            # Instead, draw an arrow. Code copy/pasted from GeneSeqFeature
+            if self.CDS.strand==1:
+                arrow_start=self.CDS_start
+                arrow_direction=self.CDS_end-self.CDS_start
+                shape='right'
+                body_width=self.height*.6667
+                body_width=self.height*1
+                head_width=self.height*1.5
+            elif self.CDS.strand==-1:
+                arrow_start=self.CDS_end
+                arrow_direction=-self.CDS_end-self.CDS_start
+                shape='left'
+                body_width=self.height*.6667
+                body_width=self.height*1
+                head_width=self.height*1.5
+            else:
+                raise ValueError('Gene feature must have strand equal to 1 or -1')
+            shape = 'full' # if we prefer a full arrow instead of half arrow head.
+            feat_draw=FancyArrow(arrow_start, self.Y + 0.5, dx=arrow_direction, dy=0, ec=self.ec,
+                fc=self.fc,alpha=self.alpha, width=body_width, head_length = self.head_length,
+                head_width=head_width,lw=self.lw,length_includes_head=True,
+                shape=shape, head_starts_at_zero=False)
+            print("head_width", head_width, self.height, "self.Y", self.Y, "body_width", body_width)
             self.patches.append(feat_draw)
-        
+
             
 
             

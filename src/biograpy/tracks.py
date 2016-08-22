@@ -115,7 +115,7 @@ class BaseTrack(object):
 '''
     
     Ycord = 0.0
-    _betw_feat_space = 2
+    _betw_feat_space = 2.5
     
     default_cm='Accent'#deafult matplotlib colormap to use
     
@@ -223,6 +223,7 @@ class BaseTrack(object):
         line_controller=[]
         size_memory={}
         draw_features = []
+        last_feature_xlim = [0,0]
         while len(draw_features) < len(self.features):
             for feat_numb, feat2draw in enumerate(self.features):
                 '''estimate feature lenght'''
@@ -240,17 +241,22 @@ class BaseTrack(object):
                     for fname in feat2draw.feat_name:
                         # set the correct dpi to correctly estimate text size.
                         # required by Text class in matplotlib
+                        # This can be a problem with ax.annotate, bounding box is too wide?
+                        # We do not take into consideration text annotations
                         #bbox = fname.get_window_extent(dpi = dpi)
-                        bbox = fname.get_window_extent()
-                        xs_patches.append(bbox.xmax)
-                        xs_patches.append(bbox.xmin)
+                        #bbox = fname.get_window_extent()
+                        #xs_patches.append(bbox.xmax)
+                        #xs_patches.append(bbox.xmin)
+                        pass
                     size_memory[feat_numb]={'left_margin' : min(xs_patches),
                                     'right_margin' : max(xs_patches)}
 
                 ''' Check for collisions both on text and patches'''
                 if feat_numb not in draw_features:
+                    print("feat_numb",feat_numb)
                     draw=True
                     for prev_start,prev_end in line_controller:
+                        print("line_controller",prev_start, prev_end, size_memory[feat_numb])
                         if  (prev_start <= size_memory[feat_numb]['left_margin'] <= prev_end) or \
                             (prev_start <= size_memory[feat_numb]['right_margin'] <= prev_end) or \
                             ((size_memory[feat_numb]['left_margin'] < prev_start < size_memory[feat_numb]['right_margin']) and \
@@ -285,11 +291,14 @@ class BaseTrack(object):
                         for iname, fname in enumerate(feat2draw.feat_name):
                             y=fname.get_position()[1]
                             feat2draw.feat_name[iname].set_y(y + self.Ycord)
-                            current_x, current_y = fname.xyann
-                            feat2draw.feat_name[iname].xytext = (current_x, current_y + self.Ycord)
+                            feat2draw.Y2 = (y + self.Ycord)
+                            #current_x, current_y = fname.xyann
+                            #feat2draw.feat_name[iname].xytext = (current_x, current_y + self.Ycord)
+                            print("feat_name ",fname,"y",y,"new y",fname.get_position()[1])
                         draw_features.append(feat_numb)
                         
             #if len(draw_features) < len(self.features):
+            
             self.Ycord-=self._betw_feat_space
             line_controller=[]
             self.drawn_lines += 1
