@@ -12,7 +12,7 @@ there's always a simpler solution you're not yet aware of...
 
 import matplotlib, warnings, operator
 matplotlib.use('Agg')
-import tracks 
+from .tracks import PlotTrack
 from matplotlib.font_manager import FontProperties
 
 warnings.simplefilter("ignore")
@@ -63,8 +63,8 @@ class Panel(object):
     '''
 
 
-    def __init__(self,  fig_width=1500, fig_height=None, fig_dpi=80, **kwargs):
-        """ """
+    def __init__(self,  fig=None, fig_width=1500, fig_height=None, fig_dpi=80, **kwargs):
+        """ """        
         self.fig_width = fig_width / float(fig_dpi)
         # fig_height are handled by matplotlib in inches not pixel
         if fig_height:
@@ -81,8 +81,12 @@ class Panel(object):
         else:
             self.track_padding = kwargs.get('track_padding', 0)
         self.start_position = kwargs.get('start_position', 0) #changes the start position by adding this value to all x coords
-        self.padding = kwargs.get('padding', fig_width*.02)#pixel to be used as padding in all 4 directions
-        self.hpadding = self.padding / float(fig_width)
+        if fig is not None:
+            self.fig_width = fig.get_figwidth()
+            self.dpi = fig.get_dpi()
+        self.padding = kwargs.get('padding', self.fig_width*float(fig_dpi)*.02)#pixel to be used as padding in all 4 directions
+        self.hpadding = self.padding / float(self.fig_width*float(fig_dpi))
+        #print("padding",self.fig_width,self.dpi,self.padding,self.hpadding)
         self.figure_bottom_space = kwargs.get('figure_bottom_space', 0)
         if self.fig_height:
             self.vpadding = self.padding / float(fig_height)
@@ -92,10 +96,26 @@ class Panel(object):
         self.xmin = kwargs.get('xmin', None)
         self.xmax = kwargs.get('xmax', None)
         
-            
-        '''create figure object'''
-        self.fig = matplotlib.pyplot.figure(1, figsize = (self.fig_width, self.fig_width), dpi = self.dpi, frameon = False)
-        self.ax = self.fig.add_subplot(111)#needed to make it invisible
+        
+        '''Pass figure as argument, add tracks below the main figure.'''
+        if fig is not None:
+            self.use_existing_figure = True
+            self.ax = fig.axes[0]
+            #self.ax = fig.add_subplot(212, sharex=fig.axes[0])
+            self.fig = fig # use existing figure
+            #self.fig_height = fig.get_figheight() # will be computed by draw_tracks
+            self.existing_fig_height = fig.get_figheight()
+            self.xmin = int(self.ax.get_xlim()[0])
+            self.xmax = int(self.ax.get_xlim()[1])
+            self.hpadding = self.ax.get_position().x0
+            self.figure_bottom_space = 0.05
+            #print(self.fig_width, self.xmin, self.xmax, self.hpadding, self.ax.get_position().width)
+        else:
+            self.use_existing_figure = False
+            '''create figure object'''
+            self.fig = matplotlib.pyplot.figure(1, figsize = (self.fig_width, self.fig_width), dpi = self.dpi, frameon = False)
+            self.ax = self.fig.add_subplot(111)#needed to make it invisible
+            self.ax.set_axis_off()
         ''' '''
 
     def add_track(self, track):
@@ -120,21 +140,22 @@ class Panel(object):
             self.add_track(track)
 
     def _estimate_fig_height(self,):
+        # the denominator is the aspect ratio of a single track
         return self.drawn_lines*self.fig_width/30.
 
     def _draw_tracks(self, **kwargs):
         '''create an axis for each track and moves
         accordingly all the child features'''
         
-        self.ax.set_axis_off()
         self.Drawn_objects = []
         self.track_axes = []
         draw_xmin = kwargs.get('xmin', None)
         draw_xmax = kwargs.get('xmax', None)
-        if draw_xmin:
+        if draw_xmin is not None:
             self.xmin = draw_xmin
-        if draw_xmax:
+        if draw_xmax is not None:
             self.xmax = draw_xmax
+            
         '''estimate track height using track.drawn_lines
         find max and min x coords, and check for colorbar
         presence in at least one track'''
@@ -159,14 +180,20 @@ class Panel(object):
                 Xs.append(track.xmin)
                 Xs.append(track.xmax)
         if self.xmin == None:
-            self.xmin = min(Xs)
+            self.xmin = min(Xs) if Xs != [] else 0
         if self.xmax == None:
             self.xmax =max(Xs)
         '''auto estimate fig_heigth and panning if needed '''
         if not self.fig_height:#automatcally set fig height basing on the total number of features
-            self.fig_height=self._estimate_fig_height()
+            self.fig_height = self._estimate_fig_height()
             self.vpadding = (float(self.padding)/self.dpi) / self.fig_height
             self.vtrack_padding = (float(self.track_padding)/self.dpi) / self.fig_height
+            #print("vtrack_padding", self.fig_height, self.padding, self.track_padding, self.dpi, self.fig_height, self.vpadding, self.vtrack_padding)
+        
+        if self.use_existing_figure:
+            self.axisHeightScaling = self.fig_height / self.existing_fig_height
+        else:
+            self.axisHeightScaling = 1.0
             
         '''set colorbar dimension '''
         if cbars == 'label':
@@ -182,11 +209,20 @@ class Panel(object):
         
         axis_left_pad = self.hpadding
         default_figure_bottom_space = self.vpadding + float(self.figure_bottom_space)/self.dpi
-        axis_bottom_pad = 1.0 - default_figure_bottom_space
+        if self.use_existing_figure:
+            default_figure_bottom_space = 0.1
+            axis_bottom_pad = 0.0 - default_figure_bottom_space
+        else:
+            axis_bottom_pad = 1.0 - default_figure_bottom_space
         axis_width = 1.-2*self.hpadding
         axis_scale = None# used to persist the same scale on all the tracks
         if cbars:
             axis_width -= (cbar_extent + cbar_axis_space + cbar_right_pad)
+        if self.use_existing_figure:
+            # Use the same axis width as the figure
+            axis_width = self.ax.get_position().width
+        
+        
         '''cycle trought tracks and draw them as axix object '''
         #canvas_height = 0
         for track_num, track in enumerate(self.tracks):
@@ -201,13 +237,14 @@ class Panel(object):
                         axis_height = (float(track.drawn_lines)/self.drawn_lines)  - self.vpadding/(2.*len(self.tracks)) - default_figure_bottom_space/len(self.tracks)
                         axis_scale = axis_height / float(track.drawn_lines)
                 axis_bottom_pad -= (axis_height + self.vtrack_padding/2.)
-                axis = matplotlib.pyplot.axes([axis_left_pad,axis_bottom_pad, axis_width, axis_height ],) 
+                axis = matplotlib.pyplot.axes([axis_left_pad, axis_bottom_pad*self.axisHeightScaling, axis_width, axis_height*self.axisHeightScaling ],) 
+                matplotlib.pyplot.sca(axis)
                 self.track_axes.append(axis)
                 
                 
                 '''handle track axis display, ticks and tickslabel '''
                 '''set Y lims '''
-                if isinstance(track, tracks.PlotTrack):
+                if isinstance(track, PlotTrack):
                     if track.show_name:
                         if track.show_name == 'top':
                             axis.set_ylim(track.Ycord, track.ymax+1)
@@ -300,9 +337,7 @@ class Panel(object):
                                 X_major_ticks_labels.append(i)
                     axis.set_xticklabels(X_major_ticks_labels, fontsize=track.tickfontsize)
                     if track.x_use_sequence:
-                        try:
-                            axis.xaxis.set_tick_params(pad = 15, )
-                        except: pass #not supported in matplotlib <1
+                        axis.xaxis.set_tick_params(pad = 15, )
                 else:
                     axis.set_xticklabels([])
                 
@@ -361,9 +396,7 @@ class Panel(object):
                             Y_major_ticks_labels.append(i)
                     axis.set_yticklabels(Y_major_ticks_labels, fontsize=track.tickfontsize)
                 else:
-                    try:
-                        axis.yaxis.set_tick_params(labelsize = track.tickfontsize)
-                    except: pass #not supported in matplotlib <1
+                    axis.yaxis.set_tick_params(labelsize = track.tickfontsize)
                 '''minor Y ticks '''
                 Y_minor_ticks_labels = None
                 if track.yticks_minor != None:
@@ -386,9 +419,8 @@ class Panel(object):
                                 Y_minor_ticks_labels.append(i)
                     axis.set_yticklabels(Y_minor_ticks_labels, fontsize=track.tickfontsize_minor, minor=True)
                 else:
-                    try:
-                        axis.yaxis.set_tick_params(which= 'minor', labelsize = track.tickfontsize)
-                    except: pass #not supported in matplotlib <1
+                    axis.yaxis.set_tick_params(which= 'minor', labelsize = track.tickfontsize)
+                    
                        
                     
 
@@ -406,16 +438,20 @@ class Panel(object):
                 for feature in track.features:
                     self.Drawn_objects.append(feature)
                     for patch in feature.patches:
+                        print(patch)
                         if isinstance(patch, matplotlib.lines.Line2D):
                             axis.add_line(patch)
                         elif isinstance(patch, matplotlib.patches.Patch):
                             axis.add_patch(patch)
                         else:
                             axis.add_artist(patch)
-                        patch.set_transform(axis.transData)# IMPORTANT WORKAROUND!!! if not manually set, transform is not passed correctly in Line2D objects
-                                                
+                        #patch.set_transform(axis.transData)# IMPORTANT WORKAROUND!!! if not manually set, transform is not passed correctly in Line2D objects
+                                        
+                    feature.draw_feat_name(ax=axis)
                     for feat_name in feature.feat_name:
-                        axis.add_artist(feat_name)
+                        print(feat_name)
+                        feat_name.set_visible(True)
+                        #axis.add_artist(feat_name)
 
                 if track.draw_cb:
                     cb_axis = matplotlib.pyplot.axes([axis_left_pad + axis_width + cbar_axis_space - cbar_right_pad ,axis_bottom_pad, cbar_extent, axis_height ],) 
@@ -441,10 +477,11 @@ class Panel(object):
                 legend_font.set_family('serif')
                 legend_font.set_weight('normal')
                 axis.legend(prop = legend_font)
-                
-        '''set panel size and panning '''
-        self.fig.set_figheight(self.fig_height)
-        self.fig.set_figwidth(self.fig_width)
+        
+        if not self.use_existing_figure:
+            '''set panel size and panning '''
+            self.fig.set_figheight(self.fig_height)
+            self.fig.set_figwidth(self.fig_width)
 
     def _boxes(self):
         '''must be called after Drawer.save(output)

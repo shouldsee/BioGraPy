@@ -150,7 +150,7 @@ class BaseTrack(object):
         
         self.norm = kwargs.get('norm', None)# normalizing function, if None build one. could be any function taking a value an returning a float between 0 and 1
         if not self.norm:
-            self.norm = colors.normalize(vmin = self.min_score, vmax = self.max_score)
+            self.norm = colors.Normalize(vmin = self.min_score, vmax = self.max_score)
                 
         
         self.cm = cm.get_cmap(kwargs.get('cm', self.default_cm))
@@ -240,7 +240,8 @@ class BaseTrack(object):
                     for fname in feat2draw.feat_name:
                         # set the correct dpi to correctly estimate text size.
                         # required by Text class in matplotlib
-                        bbox = fname.get_window_extent(dpi = dpi)
+                        #bbox = fname.get_window_extent(dpi = dpi)
+                        bbox = fname.get_window_extent()
                         xs_patches.append(bbox.xmax)
                         xs_patches.append(bbox.xmin)
                     size_memory[feat_numb]={'left_margin' : min(xs_patches),
@@ -284,7 +285,7 @@ class BaseTrack(object):
                         for iname, fname in enumerate(feat2draw.feat_name):
                             y=fname.get_position()[1]
                             feat2draw.feat_name[iname].set_y(y + self.Ycord)
-                            current_x, current_y = fname.xytext
+                            current_x, current_y = fname.xyann
                             feat2draw.feat_name[iname].xytext = (current_x, current_y + self.Ycord)
                         draw_features.append(feat_numb)
                         
@@ -359,7 +360,8 @@ class BaseTrack(object):
             for iname, fname in enumerate(feat2draw.feat_name):
                 y=fname.get_position()[1]
                 feat2draw.feat_name[iname].set_y(y + self.Ycord)
-                current_x, current_y = fname.xytext
+                #current_x, current_y = fname.xytext
+                current_x, current_y = fname.xyann
                 feat2draw.feat_name[iname].xytext = (current_x , current_y + self.Ycord)
             self.Ycord-=self._betw_feat_space
             self.drawn_lines += 1
@@ -376,7 +378,7 @@ class BaseTrack(object):
                         feat2draw.ec = feat2draw.fc
                 else:# color by feature number
                     if not feat2draw.cm_value:
-                        self.norm = colors.normalize(1,len(self.features)+1,)
+                        self.norm = colors.Normalize(1,len(self.features)+1,)
                         feat2draw.cm_value = feat_numb +1
                     feat2draw.fc = self.cm(self.norm(feat2draw.cm_value))
             feat2draw.draw_feature()
@@ -396,6 +398,7 @@ class BaseTrack(object):
             self._draw_ordered_features(feat_list, )
         else:
             self._draw_ordered_features()
+            pass
     
         
         

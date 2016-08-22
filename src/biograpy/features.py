@@ -151,6 +151,7 @@ class BaseGraphicFeature(object):
         self.feat_name = []
         font_feat = FontProperties()
         set_size = kwargs.get('set_size','x-small')
+        ax = kwargs.get('ax',plt.gca())
         set_family = kwargs.get('set_family','serif')
         set_weight = kwargs.get('set_weight','normal')
         va=kwargs.get('va','top')
@@ -160,9 +161,14 @@ class BaseGraphicFeature(object):
         font_feat.set_family(set_family)
         font_feat.set_weight(set_weight)
         text_x = self.start
+        print(xoffset)
         if (self.start < xoffset) and (xoffset <= self.end):
             text_x+= xoffset
-        self.feat_name = [plt.annotate(self.name, xy = (text_x, self.Y), xytext = (text_x, self.Y - self.height/5.), fontproperties=font_feat, horizontalalignment=ha, verticalalignment=va)]
+        print("drawing feature name", self.name)
+        self.feat_name = [ax.annotate(self.name, xy = (text_x, self.Y), xytext = (text_x, self.Y - self.height/5.), fontproperties=font_feat, horizontalalignment=ha, verticalalignment=va)]
+        for fname in self.feat_name:
+            fname.set_visible(False)
+        #self.feat_name = [Text(x=text_x, y=self.Y, text=self.name, fontproperties=font_feat, horizontalalignment=ha, verticalalignment=va)]
 
         
 class Simple(BaseGraphicFeature):
@@ -282,7 +288,7 @@ class GeneSeqFeature(BaseGraphicFeature):
             head_width=self.height
         elif self.feature.strand==-1:
             arrow_start=self.end
-            arrow_direction=self.start-self.end
+            arrow_direction=-self.end-self.start
             shape='left'
             body_width=self.height*.6667
             head_width=self.height
