@@ -3,6 +3,11 @@
 Changelog
 =========
 
+1.1 alpha
+---------------------
+- Added novel feature types: PrettyTextSequence, CoupledmRNAandCDS
+- Added option of drawing the panel below an existing matplotlib figure
+
 1.0 beta 
 ---------------------
 
