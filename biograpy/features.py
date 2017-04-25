@@ -20,8 +20,16 @@ from matplotlib.font_manager import FontProperties
 import matplotlib.cm as cm
 from matplotlib.lines import Line2D
 from matplotlib.text import Text
-from matplotlib.patches import Rectangle,Circle, Wedge, Polygon,FancyBboxPatch, FancyArrow
+from matplotlib.patches import Rectangle,Circle, Wedge, Polygon,FancyBboxPatch, FancyArrow, FancyArrowPatch, ArrowStyle
 from matplotlib.colors import Normalize,LogNorm,ListedColormap,LinearSegmentedColormap
+from Bio.SeqFeature import ExactPosition, CompoundLocation
+
+
+defaultFontSize = 11
+defaultFontSizeScalingFactor = 110    # Works well for monospace font
+textFeatureHeight = 1.1
+arrowHeadLengthRelative = 0.01
+
 
 
 class BaseGraphicFeature(object):
@@ -99,38 +107,90 @@ class BaseGraphicFeature(object):
 
             '''
     
-    default_cm='winter'#deafult matplotlib colormap to use
+    default_cm = 'winter'    #deafult matplotlib colormap to use
     
     def __init__(self, **kwargs):
         '''
         init
         '''
-        self.name=kwargs.get('name','')
-        self.type=kwargs.get('type','')
-        self.score=kwargs.get('score',0.)
-        self.height=kwargs.get('height',1.)
+        self.name = kwargs.get('name','')
+        self.type = kwargs.get('type','')
+        self.score = kwargs.get('score',0.)
+        self.height = kwargs.get('height',1.)
         # html map options
-        self.url =  kwargs.get('url','')
-        self.html_map_extend = kwargs.get('html_map_extend','') 
+        self.url = kwargs.get('url','')
+        self.html_map_extend = kwargs.get('html_map_extend','')
         #feature style options
         self.cm = cm.get_cmap(kwargs.get('cm', self.default_cm))
         self.color_by_cm = kwargs.get('color_by_cm',True)
         self.cm_value = kwargs.get('cm_value',None)
-        self.use_score_for_color=kwargs.get('use_score_for_color',False)
+        self.use_score_for_color = kwargs.get('use_score_for_color',False)
         if self.use_score_for_color:
             self.color_by_cm = True
         self.fc = kwargs.get('fc', self.cm(self.cm_value or 0))
         self.ec = kwargs.get('ec', None)
-        self.lw = kwargs.get('lw',0.5)
+        self.lw = kwargs.get('lw', 0.5)
         self.ls = kwargs.get('ls','-')
-        self.alpha=kwargs.get('alpha',.8)
-        self.boxstyle=kwargs.get('boxstyle','square, pad=0.')
-        self.Y=0.0
-        self.Y2=0.0
-        self.patches = [] # all the patches must be returned inside this list
-        self.feat_name= [] # all the patches labels must be returned inside this list
+        self.alpha = kwargs.get('alpha',.8)
+        self.boxstyle = kwargs.get('boxstyle','square, pad=0.')
+        self.Y = 0.0
+        self.Y2 = 0.0
+        self.patches = []   # all the patches must be returned inside this list
+        self.feat_name = []   # all the patches labels must be returned inside this list
         self.norm = kwargs.get('norm', None)
         
+
+    def find_arrow_dimensions(self, start, end, verbose=0):
+        # verbose = 2
+        # The following mess is needed because FancyArrowPatch only takes arrow head widths and lengths
+        # in points (1/72 inches), the method is meant to draw arrows independently of axes sizes, same as a text annotation.
+        # Because we want to set the arrow size relative to the axis, we have to transform between
+        # coordinates systems: data, axis, display pixels and inches and points.
+        # What a mess!!!
+
+        # Adjust the arrow head length relative to the axis width
+        axis_to_data = plt.gca().transAxes + plt.gca().transData.inverted()
+        headLengthData = (axis_to_data.transform((arrowHeadLengthRelative, 0))[0] -
+                          axis_to_data.transform((0, 0))[0])
+        if verbose >= 2: print("headLengthData1", headLengthData)
+        if headLengthData > end - start:
+            headLengthData = 0.75*(end - start)
+        if verbose >= 2: print("(end - start)", (end - start), "automaticHeadLengthData2", headLengthData)
+
+        # Adjust body and head widths as fixed values in data coordinates
+        bodyWidthData = self.height*1.0
+        headWidthData = self.height*1.5
+
+        # Convert all measures to x and y display inches and points
+        data_to_display = plt.gca().transData
+        xDataUnitInDisplayInches = (data_to_display.transform((1, 0))[0] -
+                                    data_to_display.transform((0, 0))[0]) / plt.gcf().get_dpi()
+        yDataUnitInDisplayInches = (data_to_display.transform((0, 1))[1] -
+                                    data_to_display.transform((0, 0))[1]) / plt.gcf().get_dpi()
+        xDataUnitInDisplayPt = xDataUnitInDisplayInches*72
+        yDataUnitInDisplayPt = yDataUnitInDisplayInches*72
+        if verbose >= 2:
+            print("xDataUnitInDisplayInches", xDataUnitInDisplayInches)
+            print("yDataUnitInDisplayInches", yDataUnitInDisplayInches)
+            print("xDataUnitInDisplayPt", xDataUnitInDisplayPt)
+            print("yDataUnitInDisplayPt", yDataUnitInDisplayPt)
+
+        headLengthInches = headLengthData*xDataUnitInDisplayInches
+        bodyWidthInches = bodyWidthData*yDataUnitInDisplayInches
+        headWidthInches = headWidthData*yDataUnitInDisplayInches
+        if verbose >= 2:
+            print("headLengthInches", headLengthInches)
+            print("headWidthData", headWidthData, "headWidthInches", headWidthInches)
+
+        headLengthPoints = headLengthInches*72
+        bodyWidthPoints = bodyWidthInches*72
+        headWidthPoints = headWidthInches*72
+
+        return (headLengthData, bodyWidthData, headWidthData,
+                headLengthInches, bodyWidthInches, headWidthInches,
+                headLengthPoints, bodyWidthPoints, headWidthPoints)
+
+
 
     def draw_feat_name(self,**kwargs):
         '''calling self.draw_feat_name() agailn will overwrite the previous \
@@ -155,20 +215,21 @@ class BaseGraphicFeature(object):
         ax = kwargs.get('ax',plt.gca())
         set_family = kwargs.get('set_family','serif')
         set_weight = kwargs.get('set_weight','normal')
-        va=kwargs.get('va','top')
-        ha=kwargs.get('ha','left')
-        xoffset = kwargs.get('xoffset',0)# 
+        va = kwargs.get('va','top')
+        ha = kwargs.get('ha','left')
+        xoffset = kwargs.get('xoffset',0)
         font_feat.set_size(set_size)
         font_feat.set_family(set_family)
         font_feat.set_weight(set_weight)
         text_x = self.start
         if (self.start < xoffset) and (xoffset <= self.end):
-            text_x+= xoffset
+            text_x += xoffset
         #print("drawing feature name", self.name, (text_x, self.Y), (text_x, self.Y - self.height/5.), self.Y2)
         #self.feat_name = [ax.annotate(self.name, xy = (text_x, self.Y2), xytext = (text_x, self.Y2 - self.height/5.), fontproperties=font_feat, horizontalalignment=ha, verticalalignment=va)]
         #for fname in self.feat_name:
         #    fname.set_visible(False)
-        self.feat_name = [Text(x=text_x, y=self.Y2, text=self.name, fontproperties=font_feat, horizontalalignment=ha, verticalalignment=va)]
+        self.feat_name = [Text(x=text_x, y=self.Y2 - 0.12*self.height, text=self.name,
+                          fontproperties=font_feat, horizontalalignment=ha, verticalalignment=va)]
 
         
 class Simple(BaseGraphicFeature):
@@ -187,17 +248,18 @@ class Simple(BaseGraphicFeature):
         self.start = start
         self.end = end
 
-    def draw_feature(self):        
-        feat_draw=FancyBboxPatch((self.start,self.Y), 
-                                  width=(self.end-self.start),
-                                  height=self.height, 
-                                  boxstyle=self.boxstyle, 
-                                  lw=self.lw,
-                                  ec=self.ec,
-                                  fc=self.fc, 
-                                  alpha=self.alpha, 
-                                  url = self.url, 
-                                  mutation_aspect = 0.3)
+
+    def draw_feature(self):
+        feat_draw = FancyBboxPatch((self.start,self.Y),
+                                   width=(self.end-self.start),
+                                   height=self.height,
+                                   boxstyle=self.boxstyle,
+                                   lw=self.lw,
+                                   ec=self.ec,
+                                   fc=self.fc,
+                                   alpha=self.alpha,
+                                   url=self.url,
+                                   mutation_aspect=0.3)
         self.patches.append(feat_draw)
 
 
@@ -224,11 +286,11 @@ class GenericSeqFeature(BaseGraphicFeature):
 
         '''
         BaseGraphicFeature.__init__(self,**kwargs)
-        self.start=kwargs.get('start',min([feature.location.start.position,feature.location.end.position]))
-        self.end=kwargs.get('end',max([feature.location.start.position,feature.location.end.position]))
-        self.type=kwargs.get('type',feature.type)
+        self.start = kwargs.get('start',min([feature.location.start.position,feature.location.end.position]))
+        self.end = kwargs.get('end',max([feature.location.start.position,feature.location.end.position]))
+        self.type = kwargs.get('type',feature.type)
         if 'score' in feature.qualifiers:
-            self.score=kwargs.get('score',feature.qualifiers['score'])
+            self.score = kwargs.get('score',feature.qualifiers['score'])
 
 
     def draw_feature(self):
@@ -266,45 +328,71 @@ class GeneSeqFeature(BaseGraphicFeature):
     def __init__(self,feature,exons=[],**kwargs):
 
         BaseGraphicFeature.__init__(self,**kwargs)
-        self.height=kwargs.get('height',2.)
-        self.start=kwargs.get('start',min([feature.location.start.position,feature.location.end.position]))
-        self.end=kwargs.get('end',max([feature.location.start.position,feature.location.end.position]))
-        default_head_length = 5
-        if abs(self.end -  self.start<= 50):
+        self.height = kwargs.get('height',1.)
+        self.start = kwargs.get('start',min([feature.location.start.position,feature.location.end.position]))
+        self.end = kwargs.get('end',max([feature.location.start.position,feature.location.end.position]))
+        default_head_length = 35
+        if abs(self.end - self.start <= 50):
             default_head_length = (self.end-self.start)/10.
-        self.head_length=kwargs.get('head_length',default_head_length)
-        self.type=kwargs.get('type','gene')
-        self.feature=feature
-        self.exons=exons
+        self.head_length = kwargs.get('head_length', default_head_length)
+        self.type = kwargs.get('type','gene')
+        self.feature = feature
+        self.exons = exons
 
 
     def draw_feature(self):
-        self.patches=[]
-        if self.feature.strand==1:
-            arrow_start=self.start
-            arrow_direction=self.end-self.start
-            shape='right'
-            body_width=self.height*.6667
-            head_width=self.height
-        elif self.feature.strand==-1:
-            arrow_start=self.end
-            arrow_direction=self.start-self.end
-            shape='left'
-            body_width=self.height*.6667
-            head_width=self.height
+
+        (headLengthData, bodyWidthData, headWidthData,
+         headLengthInches, bodyWidthInches, headWidthInches,
+         headLengthPoints, bodyWidthPoints, headWidthPoints) = self.find_arrow_dimensions(self.start, self.end)
+
+        self.patches = []
+        if self.feature.strand == 1:
+            arrow_start = self.start
+            arrow_direction = self.end - self.start
+        elif self.feature.strand == -1:
+            arrow_start = self.end
+            arrow_direction = self.start - self.end
         else:
             raise ValueError('Gene feature must have strand equal to 1 or -1')
-        feat_draw=FancyArrow(arrow_start, self.Y, dx=arrow_direction, dy=0, ec=self.ec,
-            fc=self.fc,alpha=self.alpha, width=body_width, head_length = self.head_length,
-            head_width=head_width,lw=self.lw,length_includes_head=True,
-            shape=shape, head_starts_at_zero=False)
+        
+        # feat_draw = FancyArrowPatch(
+        #     (arrow_start, self.Y + 0.5),
+        #     (arrow_start + arrow_direction, self.Y + 0.5),
+        #     arrowstyle=ArrowStyle('simple',
+        #                           head_length=headLengthInches,
+        #                           head_width=headWidthInches,
+        #                           tail_width=bodyWidthInches),
+        #     ec=self.ec, fc=self.fc, alpha=self.alpha, lw=self.lw,
+        #     mutation_scale=1)
+
+        # feat_draw = FancyArrowPatch(
+        #     (arrow_start, self.Y + 0.5),
+        #     (arrow_start + arrow_direction, self.Y + 0.5),
+        #     arrowstyle=ArrowStyle('simple',
+        #                           head_length=headLengthPoints,
+        #                           head_width=headWidthPoints,
+        #                           tail_width=bodyWidthPoints),
+        #     ec=self.ec, fc=self.fc, alpha=self.alpha, lw=self.lw,
+        #     mutation_scale=1)
+
+        feat_draw = FancyArrow(
+            x=arrow_start, y=self.Y + self.height/2., dx=arrow_direction, dy=0,
+            ec=self.ec, fc=self.fc, alpha=self.alpha, lw=self.lw,
+            width=bodyWidthData,
+            head_length=headLengthData,
+            head_width=headWidthData,
+            length_includes_head=True, head_starts_at_zero=False)
+
         self.patches.append(feat_draw)
-        for exon in self.exons:
-            feat_draw=FancyBboxPatch((int(exon.location.start.position),self.Y),
-                width=(int(exon.location.end.position)-int(exon.location.start.position)),
-                height=body_width/2., boxstyle=self.boxstyle,lw=0, ec=self.ec,
-                fc=self.fc,alpha=self.alpha+0.1, url = self.url,)
-            self.patches.append(feat_draw)
+
+        # for exon in self.exons:
+        #     feat_draw = FancyBboxPatch(
+        #         (int(exon.location.start.position),self.Y),
+        #         width=(int(exon.location.end.position)-int(exon.location.start.position)),
+        #         height=body_width/2., boxstyle=self.boxstyle,lw=0, ec=self.ec,
+        #         fc=self.fc,alpha=self.alpha+0.1, url=self.url,)
+        #     self.patches.append(feat_draw)
 
 
 class TextSequence(BaseGraphicFeature):
@@ -325,7 +413,7 @@ class TextSequence(BaseGraphicFeature):
         set_family            as in matplotlib, default is ``'monospace'``     
         set_weight            as in matplotlib, default is ``'normal'``     
         va                    as in matplotlib, default is ``'bottom'`` 
-        ha                    as in matplotlib, default is ``'left'``
+        ha                    as in matplotlib, default is ``'center'``
         ===================== ==================================================
     
     Usage eg.
@@ -339,37 +427,118 @@ class TextSequence(BaseGraphicFeature):
     def __init__(self,sequence,**kwargs):
 
         BaseGraphicFeature.__init__(self,**kwargs)
+        self.height = kwargs.get('height', textFeatureHeight)
         self.sequence = sequence
         self.start = kwargs.get('start',0)
         self.end = kwargs.get('end', self.start + len(self.sequence))
-        self.set_size = kwargs.get('set_size','xx-small')
+        self.customFontSize = 'set_size' in kwargs
+        self.set_size = kwargs.get('set_size','medium')
         self.set_family = kwargs.get('set_family','monospace')
         self.set_weight = kwargs.get('set_weight','normal')
         self.va = kwargs.get('va','bottom')
-        self.ha = kwargs.get('ha','left')
-        self.font_feat=FontProperties()
-        self.font_feat.set_size(self.set_size)
-        self.font_feat.set_family(self.set_family)       
-        self.font_feat.set_weight(self.set_weight) 
+        self.ha = kwargs.get('ha','center')
+        self.fontProp = FontProperties()
+        self.fontProp.set_size(self.set_size)
+        self.fontProp.set_family(self.set_family)
+        self.fontProp.set_weight(self.set_weight)
         
     def draw_feature(self):
-        self.patches=[]
+        if not self.customFontSize:
+            # Adjust default text size such that we uses the biggest font size possible to fill all the space
+            # between two positions. The idea is to make the font size proportional to the distance
+            # in inches between position i and i+1 (distance 1 in axis coordinates).
+            width1AxisUnitInDisplayPixels = plt.gca().transData.transform((1, 0))[0] - plt.gca().transData.transform((0, 0))[0]
+            width1AxisUnitInDisplayInches = width1AxisUnitInDisplayPixels / plt.gcf().get_dpi()
+            self.fontProp.set_size(width1AxisUnitInDisplayInches*defaultFontSizeScalingFactor)
+
+        self.patches = []
         for i, char in enumerate(self.sequence):
-            '''self.patches.append(plt.annotate(char, 
-                                             xy = (self.start + i, 0), 
-                                             xytext = (self.start + i, 0-self.height/5.), 
-                                             fontproperties = self.font_feat, 
-                                             horizontalalignment = self.ha, 
-                                             verticalalignment = self.va ))'''
-            self.patches.append(Text(x = self.start + i,
-                                     y= 0,
-                                     text = char, 
-                                     fontproperties = self.font_feat, 
-                                     horizontalalignment = self.ha, 
-                                     verticalalignment = self.va,
-                                     url = self.url, ))
-         
+            self.patches.append(Text(x=self.start + i,
+                                     y=0,
+                                     text=char,
+                                     fontproperties=self.fontProp,
+                                     horizontalalignment=self.ha,
+                                     verticalalignment=self.va,
+                                     url=self.url))
+
+
+
+class PrettyTextSequence(BaseGraphicFeature):
+    """
+    characterList should be a list of (character, attributeDictionary).
+    """
+
+    def __init__(self, characterList, **kwargs):
+
+        BaseGraphicFeature.__init__(self,**kwargs)
+        self.characterList = characterList
+        self.height = kwargs.get('height', textFeatureHeight)
+        self.start = kwargs.get('start',0)
+        self.end = kwargs.get('end', self.start + len(self.characterList))
+        self.hasCustomGeneralFontSize = 'set_size' in kwargs
+        self.set_size = kwargs.get('set_size','medium')
+        self.set_family = kwargs.get('set_family','monospace')
+        self.set_weight = kwargs.get('set_weight','normal')
+        self.va = kwargs.get('va','bottom')
+        self.ha = kwargs.get('ha','center')
+        self.fontProp = FontProperties()
+        self.fontProp.set_size(self.set_size)
+        self.fontProp.set_family(self.set_family)
+        self.fontProp.set_weight(self.set_weight)
         
+    def draw_feature(self):
+        if not self.hasCustomGeneralFontSize:
+            # Adjust default text size such that we uses the biggest font size possible to fill all the space
+            # between two positions. The idea is to make the font size proportional to the distance
+            # in inches between position i and i+1 (distance 1 in axis coordinates).
+            width1AxisUnitInDisplayPixels = plt.gca().transData.transform((1, 0))[0] - plt.gca().transData.transform((0, 0))[0]
+            width1AxisUnitInDisplayInches = width1AxisUnitInDisplayPixels / plt.gcf().get_dpi()
+            automaticFontSize = width1AxisUnitInDisplayInches*defaultFontSizeScalingFactor
+            self.fontProp.set_size(automaticFontSize)
+
+        self.patches = []
+        for i, charTuple in enumerate(self.characterList):
+            if type(charTuple) is str:
+                # We only have a character without any custom font properties
+                char = charTuple
+                propArgsDict = {'fontproperties':self.fontProp}
+            else:
+                # We have a character with a dictionnary of custom font properties
+                (char, charPropArgsDict) = charTuple
+                if charPropArgsDict is not None:
+                    propArgsDict = charPropArgsDict
+
+            # Add default font properties if needed
+            if 'fontproperties' not in propArgsDict:
+                propArgsDict['fontproperties'] = self.fontProp
+
+            # Adjust the font size automatically, unless explicitly defined as custom size in the font properties dictionary
+            # Note that here we override any font size that would be defined in the FontProperties object passed in 
+            # `propArgsDict['fontproperties']`. This is because there is no way to know if the FontProperties object uses
+            #  the default font size or a user defined font size. We make it explicit by requiring the custom font size
+            # as a separate option in the `propArgsDict`.
+            customFontSize = propArgsDict.get('size')
+            if customFontSize is not None:
+                propArgsDict['fontproperties'].set_size(customFontSize)
+            else:
+                propArgsDict['fontproperties'].set_size(automaticFontSize)
+
+            # If the font size is too small, we do not draw any feature
+            if propArgsDict['fontproperties'].get_size() > 3:
+                feat_draw = Text(x=self.start + i,
+                                 y=0,
+                                 text=char,
+                                 horizontalalignment=self.ha,
+                                 verticalalignment=self.va,
+                                 **propArgsDict)
+                    # # Here we plot directly the text on the current figure, however we will have to remove from it afterwards
+                    # feat_draw = fig.text(self.start + i, 0, char,
+                    #                            horizontalalignment=self.ha,
+                    #                            verticalalignment=self.va,
+                    #                            **propArgsDict)
+                self.patches.append(feat_draw)
+
+
 
 class PlotFeature(BaseGraphicFeature):
     ''' 
@@ -636,38 +805,39 @@ class CoupledmRNAandCDS(BaseGraphicFeature):
 
     
     '''
-    def __init__(self,mRNA,CDS,**kwargs):
+    def __init__(self, mRNA, CDS, **kwargs):
         '''
         
         '''
         BaseGraphicFeature.__init__(self,**kwargs)
-        self.mRNA_start=kwargs.get('mRNA_start',min([mRNA.location.start.position,mRNA.location.end.position]))
-        self.mRNA_end=kwargs.get('mRNA_end',max([mRNA.location.start.position,mRNA.location.end.position]))
-        self.CDS_start=kwargs.get('CDS_start',min([CDS.location.start.position,CDS.location.end.position]))
-        self.CDS_end=kwargs.get('CDS_end',max([CDS.location.start.position,CDS.location.end.position]))
+        self.mRNA_start = kwargs.get('mRNA_start',min([mRNA.location.start.position,mRNA.location.end.position]))
+        self.mRNA_end = kwargs.get('mRNA_end',max([mRNA.location.start.position,mRNA.location.end.position]))
+        self.CDS_start = kwargs.get('CDS_start',min([CDS.location.start.position,CDS.location.end.position]))
+        self.CDS_end = kwargs.get('CDS_end',max([CDS.location.start.position,CDS.location.end.position]))
         self.start = self.mRNA_start
         self.end = self.mRNA_end
-        self.type=kwargs.get('type','mRNA')
+        self.type = kwargs.get('type','mRNA')
         if 'score' in mRNA.qualifiers:
-            self.score=kwargs.get('score',mRNA.qualifiers['score'])
-        self.mRNA=mRNA
-        self.CDS=CDS
-        self.ec=kwargs.get('ec','k')
+            self.score = kwargs.get('score',mRNA.qualifiers['score'])
+        self.mRNA = mRNA
+        self.CDS = CDS
+        self.ec = kwargs.get('ec','k')
         # Arrow head length
-        default_head_length = 15
-        if abs(self.end -  self.start<= 100):
-            default_head_length = (self.end-self.start)/(100/default_head_length)
-        self.head_length=kwargs.get('head_length',default_head_length)
+        default_head_length = 35
+        if abs(self.end - self.start <= 50):
+            default_head_length = (self.end-self.start)/10.
+        self.head_length = kwargs.get('head_length', default_head_length)
 
 
     def draw_feature(self):
+
         #draw mRNA
-        if len(self.mRNA.sub_features):
-            junction_start=False
-            if self.mRNA.strand==-1:
+        if type(self.mRNA.location) is CompoundLocation:
+            junction_start = False
+            if self.mRNA.strand == -1:
                 self.mRNA.sub_features.reverse()
             for sub_feature in self.mRNA.sub_features:
-                if sub_feature.location_operator=='join':
+                if sub_feature.location_operator == 'join':
                     feat_draw=FancyBboxPatch((int(sub_feature.location.start.position),self.Y), width=(int(sub_feature.location.end.position)-int(sub_feature.location.start.position)), height=self.height, boxstyle=self.boxstyle,lw=self.lw, ec=self.ec, fc=self.fc,alpha=self.alpha-0.7, url = self.url,)
                     self.patches.append(feat_draw)
                     if junction_start:
@@ -678,46 +848,45 @@ class CoupledmRNAandCDS(BaseGraphicFeature):
                         join=plt.plot([junction_start,junction_middle,junction_end],[Yends,Ymiddle,Yends], lw=0.5 ,ls='-', c=self.ec,alpha=0.5)
                         self.patches.extend(join)
                     junction_start=float(sub_feature.location.end.position)
-        else:#if SegmentedSeqFeature is called whihout subfeatures returns a GenericSeqFeature
-            feat_draw=FancyBboxPatch((self.mRNA_start,self.Y), width=(self.mRNA_end-self.mRNA_start), height=self.height, boxstyle=self.boxstyle, lw=self.lw, ec=self.ec, fc=self.fc,alpha=self.alpha-0.5, url = self.url,)
+        else:
+            feat_draw = FancyBboxPatch((self.mRNA_start, self.Y), width=(self.mRNA_end-self.mRNA_start),
+                                       height=self.height, boxstyle=self.boxstyle, lw=self.lw, ec=self.ec,
+                                       fc=self.fc,alpha=self.alpha-0.5, url=self.url,)
             self.patches.append(feat_draw)
-        #draw CDS
-        if len(self.CDS.sub_features):
-            junction_start=False
-            if self.CDS.strand==-1:
+
+        # draw CDS
+        if type(self.CDS.location) is CompoundLocation:
+            # Note: this is probably not correct for the newer Biopython CompoundLocation class...
+            junction_start = False
+            if self.CDS.strand == -1:
                 self.CDS.sub_features.reverse()
             for sub_feature in self.CDS.sub_features:
-                if sub_feature.location_operator=='join':
-                    feat_draw=FancyBboxPatch((int(sub_feature.location.start.position),self.Y), width=(int(sub_feature.location.end.position)-int(sub_feature.location.start.position)), height=self.height, boxstyle=self.boxstyle,lw=0, ec=self.ec, fc=self.fc,alpha=self.alpha,)
+                if sub_feature.location_operator == 'join':
+                    feat_draw = FancyBboxPatch((int(sub_feature.location.start.position),self.Y), width=(int(sub_feature.location.end.position)-int(sub_feature.location.start.position)), height=self.height, boxstyle=self.boxstyle,lw=0, ec=self.ec, fc=self.fc,alpha=self.alpha,)
                     self.patches.append(feat_draw)
-        else:#if SegmentedSeqFeature is called whihout subfeatures returns a GenericSeqFeature
-            #feat_draw=FancyBboxPatch((self.CDS_start,self.Y), width=(self.CDS_end-self.CDS_start), height=self.height, boxstyle=self.boxstyle, lw=self.lw, ec=self.ec, fc=self.fc,alpha=self.alpha,)
-            
-            # Instead, draw an arrow. Code copy/pasted from GeneSeqFeature
-            if self.CDS.strand==1:
-                arrow_start=self.CDS_start
-                arrow_direction=self.CDS_end-self.CDS_start
-                shape='right'
-                body_width=self.height*.6667
-                body_width=self.height*1
-                head_width=self.height*1.5
-            elif self.CDS.strand==-1:
-                print("strand -1 arrow")
-                arrow_start=self.CDS_end
-                arrow_direction=self.CDS_start-self.CDS_end
-                shape='left'
-                body_width=self.height*.6667
-                body_width=self.height*1
-                head_width=self.height*1.5
+        else:
+            (headLengthData, bodyWidthData, headWidthData,
+             headLengthInches, bodyWidthInches, headWidthInches,
+             headLengthPoints, bodyWidthPoints, headWidthPoints) = self.find_arrow_dimensions(self.CDS_start, self.CDS_end)
+
+            if self.CDS.strand == 1:
+                arrow_start = self.CDS_start
+                arrow_direction = self.CDS_end-self.CDS_start
+            elif self.CDS.strand == -1:
+                arrow_start = self.CDS_end
+                arrow_direction = self.CDS_start-self.CDS_end
             else:
                 raise ValueError('Gene feature must have strand equal to 1 or -1')
-            shape = 'full' # if we prefer a full arrow instead of half arrow head.
-            print("self.CDS_start", self.CDS_start, self.CDS_end)
-            feat_draw=FancyArrow(arrow_start, self.Y + 0.5, dx=arrow_direction, dy=0, ec=self.ec,
-                fc=self.fc,alpha=self.alpha, width=body_width, head_length = self.head_length,
-                head_width=head_width,lw=self.lw,length_includes_head=True,
-                shape=shape, head_starts_at_zero=False)
-            #print("head_width", head_width, self.height, "self.Y", self.Y, "body_width", body_width)
+            shape = 'full'   # if we prefer a full arrow instead of half arrow head.
+
+            feat_draw = FancyArrow(
+                x=arrow_start, y=self.Y + self.height/2., dx=arrow_direction, dy=0,
+                ec=self.ec, fc=self.fc, alpha=self.alpha, lw=self.lw,
+                width=bodyWidthData,
+                head_length=headLengthData,
+                head_width=headWidthData,
+                length_includes_head=True, head_starts_at_zero=False)
+
             self.patches.append(feat_draw)
 
             
