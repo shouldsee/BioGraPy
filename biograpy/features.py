@@ -468,13 +468,14 @@ class PrettyTextSequence(BaseGraphicFeature):
     characterList should be a list of (character, attributeDictionary).
     """
 
-    def __init__(self, characterList, **kwargs):
+    def __init__(self, sequence, highlightList=None, **kwargs):
 
         BaseGraphicFeature.__init__(self,**kwargs)
-        self.characterList = characterList
+        self.sequence = sequence
+        self.highlightList = highlightList
         self.height = kwargs.get('height', textFeatureHeight)
-        self.start = kwargs.get('start',0)
-        self.end = kwargs.get('end', self.start + len(self.characterList))
+        self.start = kwargs.get('start', 0)
+        self.end = kwargs.get('end', self.start + len(self.sequence))
         self.hasCustomGeneralFontSize = 'set_size' in kwargs
         self.set_size = kwargs.get('set_size','medium')
         self.set_family = kwargs.get('set_family','monospace')
@@ -487,6 +488,7 @@ class PrettyTextSequence(BaseGraphicFeature):
         self.fontProp.set_weight(self.set_weight)
         
     def draw_feature(self):
+
         if not self.hasCustomGeneralFontSize:
             # Adjust default text size such that we uses the biggest font size possible to fill all the space
             # between two positions. The idea is to make the font size proportional to the distance
@@ -497,20 +499,51 @@ class PrettyTextSequence(BaseGraphicFeature):
             self.fontProp.set_size(automaticFontSize)
 
         self.patches = []
-        for i, charTuple in enumerate(self.characterList):
+
+        # Transform the sequence in a list of (char, propArgsDict)
+        if type(self.sequence) is str:
+            self.sequence = list(self.sequence)
+
+        for i, charTuple in enumerate(self.sequence):
             if type(charTuple) is str:
                 # We only have a character without any custom font properties
                 char = charTuple
-                propArgsDict = {'fontproperties':self.fontProp}
-            else:
-                # We have a character with a dictionnary of custom font properties
-                (char, charPropArgsDict) = charTuple
-                if charPropArgsDict is not None:
-                    propArgsDict = charPropArgsDict
+                propArgsDict = {'fontproperties':self.fontProp.copy()}
 
             # Add default font properties if needed
             if 'fontproperties' not in propArgsDict:
-                propArgsDict['fontproperties'] = self.fontProp
+                propArgsDict['fontproperties'] = self.fontProp.copy()
+
+            # Update char tuple
+            self.sequence[i] = (char, propArgsDict)
+
+        # Apply highlighting
+        if self.highlightList is not None:
+            for highlightRegion in self.highlightList:
+                bc = highlightRegion.get('background_color')
+                if bc is None:
+                    bc = highlightRegion.get('bc')
+                bc_alpha = highlightRegion.get('background_color_alpha')
+                if bc_alpha is None:
+                    bc_alpha = highlightRegion.get('bc_alpha')
+                fc = highlightRegion.get('foreground_color')
+                if fc is None:
+                    fc = highlightRegion.get('fc')
+                weight = highlightRegion.get('weight')
+
+                for i in range(highlightRegion['start'], highlightRegion['end']):
+                    char, propArgsDict = self.sequence[i]
+                    if bc is not None:
+                        bc_alpha = 1.0 if bc_alpha is None else bc_alpha
+                        propArgsDict['bbox'] = dict(facecolor=bc, alpha=bc_alpha, edgecolor='none', lw=0, pad=0.1)
+                    if fc is not None:
+                        propArgsDict['color'] = fc
+                    if weight is not None:
+                        propArgsDict['fontproperties'].set_weight(weight)
+                    # print("highlight", i, fc, bc, bc_alpha, weight, "propArgsDict", propArgsDict)
+            
+        for i, charTuple in enumerate(self.sequence):
+            (char, propArgsDict) = charTuple
 
             # Adjust the font size automatically, unless explicitly defined as custom size in the font properties dictionary
             # Note that here we override any font size that would be defined in the FontProperties object passed in 
