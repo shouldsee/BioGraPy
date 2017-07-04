@@ -44,19 +44,22 @@ track.add_feature(biograpy.features.GeneSeqFeature(genefeat, name='GeneSeqFeatur
 # mRNA with one CDS drawn as a shaded rectangle with an arrow on top
 CDS_feature = SeqFeature(FeatureLocation(180,1000), type='CDS', strand=-1)
 mRNA_feature = SeqFeature(FeatureLocation(180,1100), type='mRNA', strand=-1)
-mRNAandCDSfeat = biograpy.features.CoupledmRNAandCDS(mRNA_feature, CDS_feature, name='CoupledmRNAandCDS1_strandm', ec='k')
+mRNAandCDSfeat = biograpy.features.CoupledmRNAandCDS(mRNA_feature, CDS_feature,
+                                                     name='CoupledmRNAandCDS1_strandm', ec='k')
 track.add_feature(mRNAandCDSfeat)
 
 # mRNA with CDS, custom color
 CDS_feature = SeqFeature( FeatureLocation(200,600), type='CDS', strand=1)
 mRNA_feature = SeqFeature( FeatureLocation(100,800), type='mRNA', strand=1)
-mRNAandCDSfeat = biograpy.features.CoupledmRNAandCDS(mRNA_feature, CDS_feature, name='CoupledmRNAandCDS1_strandp_colored', ec='r', fc='r')
+mRNAandCDSfeat = biograpy.features.CoupledmRNAandCDS(mRNA_feature, CDS_feature,
+                                                     name='CoupledmRNAandCDS1_strandp_colored', ec='r', fc='r')
 track.add_feature(mRNAandCDSfeat)
 
 # Very short mRNA with CDS (to test the arrow head automatic sizing)
 CDS_feature = SeqFeature( FeatureLocation(250,260), type='CDS', strand=1)
 mRNA_feature = SeqFeature( FeatureLocation(220,300), type='mRNA', strand=1)
-mRNAandCDSfeat = biograpy.features.CoupledmRNAandCDS(mRNA_feature, CDS_feature, name='CoupledmRNAandCDS1_very_short')
+mRNAandCDSfeat = biograpy.features.CoupledmRNAandCDS(mRNA_feature, CDS_feature,
+                                                     name='CoupledmRNAandCDS1_very_short')
 track.add_feature(mRNAandCDSfeat)
 
 # Gene feature on minus strand
@@ -91,11 +94,8 @@ track.add_feature(biograpy.features.TextSequence(
         start=10, name="TextSequence1"))
 
 """
-Pretty text sequence feature allows to pass a text sequence together with a list of regions to highlight.
-
-There is one limitation to our text features, is that the font size is calculated when creating the
-PrettyTextSequence object, based on the current axis. Therefore, we cannot re-use the PrettyTextSequence
-in another Panel, for example. Possibly in another track with the same dimensions should be ok.
+Pretty text sequence feature allows to pass a text sequence together with a list of regions
+to highlight. The font size is calculated automatically to fit the scale of the x axis.
 """
 
 prettyTextFeat = biograpy.features.PrettyTextSequence(
