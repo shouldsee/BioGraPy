@@ -11,7 +11,6 @@ there's always a simpler solution you're not yet aware of...
 '''
 
 import matplotlib, warnings, operator
-matplotlib.use('Agg')
 from .tracks import PlotTrack
 from matplotlib.font_manager import FontProperties
 
@@ -109,7 +108,6 @@ class Panel(object):
             self.xmin = int(self.ax.get_xlim()[0])
             self.xmax = int(self.ax.get_xlim()[1])
             self.hpadding = self.ax.get_position().x0
-            self.figure_bottom_space = 0.05
             # print("existing figure",self.fig_width, self.xmin, self.xmax, self.hpadding, self.ax.get_position().width)
         else:
             self.use_existing_figure = False

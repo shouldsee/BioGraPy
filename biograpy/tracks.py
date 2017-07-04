@@ -11,7 +11,6 @@ there's always a simpler solution you're not yet aware of...
 
 '''
 import operator, warnings
-from matplotlib.backends.backend_agg import RendererAgg
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import matplotlib.cm as cm
