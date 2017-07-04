@@ -3,7 +3,7 @@ BioGraPy - Biological Graphical Library in Python
 
 Fork that adds support to plot the tracks below an existing figure, and adds some new features to draw such as text sequence with automatic font size and highlighted text.
 
-```python3
+```python
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
@@ -74,7 +74,7 @@ panel.save('biograpy_test1.png')
 
 ![example1](/examples/biograpy_test1.png)
 
-```python3
+```python
 fig1, ax = plt.subplots(figsize=(11,3), dpi=400)
 
 ax.scatter(x=list(range(0, 100)), y=np.random.random(100))
