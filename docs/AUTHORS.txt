@@ -11,3 +11,4 @@ CONTRIBUTORS
 ============
 
 * Mauro Amico
+* Marc Weber

@@ -15,10 +15,30 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import matplotlib.cm as cm
 from matplotlib.lines import Line2D
-from matplotlib.patches import Rectangle, Circle, Wedge, Polygon, FancyBboxPatch, FancyArrow
+from matplotlib.patches import Rectangle, Circle, Wedge, Polygon, FancyBboxPatch, FancyArrow, FancyArrowPatch
 from matplotlib.font_manager import FontProperties
 from matplotlib.text import Annotation
+from matplotlib.text import Text
+from .features import TextSequence, PrettyTextSequence
 
+
+
+def find_renderer(fig):
+
+    if hasattr(fig.canvas, "get_renderer"):
+        #Some backends, such as TkAgg, have the get_renderer method, which 
+        #makes this easy.
+        renderer = fig.canvas.get_renderer()
+    else:
+        #Other backends do not have the get_renderer method, so we have a work 
+        #around to find the renderer.  Print the figure to a temporary file 
+        #object, and then grab the renderer that was used.
+        #(I stole this trick from the matplotlib backend_bases.py 
+        #print_figure() method.)
+        import io
+        fig.canvas.print_pdf(io.BytesIO())
+        renderer = fig._cachedRenderer
+    return(renderer)
 
 
 
@@ -115,7 +135,7 @@ class BaseTrack(object):
 '''
     
     Ycord = 0.0
-    _betw_feat_space = 2
+    _betw_feat_space = 2.5
     
     default_cm='Accent'#deafult matplotlib colormap to use
     
@@ -128,6 +148,7 @@ class BaseTrack(object):
             self.show_name = kwargs.get('show_name', 'top')
         else:
             self.show_name = None
+        self.fig = kwargs.get('fig', None)
         self.max_score = kwargs.get('max_score', None)
         self.min_score = kwargs.get('min_score', None)
         self.draw_axis = kwargs.get('draw_axis', ["bottom"] )
@@ -150,7 +171,7 @@ class BaseTrack(object):
         
         self.norm = kwargs.get('norm', None)# normalizing function, if None build one. could be any function taking a value an returning a float between 0 and 1
         if not self.norm:
-            self.norm = colors.normalize(vmin = self.min_score, vmax = self.max_score)
+            self.norm = colors.Normalize(vmin = self.min_score, vmax = self.max_score)
                 
         
         self.cm = cm.get_cmap(kwargs.get('cm', self.default_cm))
@@ -218,38 +239,47 @@ class BaseTrack(object):
     def _collapse(self, dpi,):
         '''collapse features '''
         plt.draw()
+        renderer = find_renderer(plt.gcf())
         # this is necessary to estimate the text dimensions and avoid collisions until draw
         # is not called the text object do not know its renderer and cannot call get_window_extent method.
-        line_controller=[]
-        size_memory={}
+        line_controller = []
+        size_memory = {}
         draw_features = []
+        last_feature_xlim = [0,0]
         while len(draw_features) < len(self.features):
             for feat_numb, feat2draw in enumerate(self.features):
                 '''estimate feature lenght'''
                 if feat_numb not in size_memory:
-                    xs_patches=[]
-                    for patch in feat2draw.patches:
-                        #for p in patch:
-                        try:
-                            bbox=patch.get_window_extent(None,)
-                        except:
-                            warnings.warn('could not find box coordinated for patch: '+str(patch) )
-                            continue
-                        xs_patches.append(bbox.xmax)
-                        xs_patches.append(bbox.xmin)
+                    xs_patches = []
+                    if type(feat2draw) in [TextSequence, PrettyTextSequence, Text]:
+                        xs_patches.append(feat2draw.start)
+                        xs_patches.append(feat2draw.end)
+                    else:
+                        for patch in feat2draw.patches:
+                            # print("patch", patch, type(patch))
+                            # print(patch.get_figure().number)
+                            bbox = patch.get_window_extent(renderer=renderer)
+                            # print("bbox", bbox, "bbox.xmax", bbox.xmax, "bbox.xmin", bbox.xmin)
+                            xs_patches.append(bbox.xmax)
+                            xs_patches.append(bbox.xmin)
                     for fname in feat2draw.feat_name:
                         # set the correct dpi to correctly estimate text size.
                         # required by Text class in matplotlib
-                        bbox = fname.get_window_extent(dpi = dpi)
-                        xs_patches.append(bbox.xmax)
-                        xs_patches.append(bbox.xmin)
-                    size_memory[feat_numb]={'left_margin' : min(xs_patches),
-                                    'right_margin' : max(xs_patches)}
+                        # This can be a problem with ax.annotate, bounding box is too wide?
+                        # We do not take into consideration text annotations
+                        #bbox = fname.get_window_extent(dpi = dpi)
+                        #bbox = fname.get_window_extent()
+                        #xs_patches.append(bbox.xmax)
+                        #xs_patches.append(bbox.xmin)
+                        pass
+                    size_memory[feat_numb] = {'left_margin':min(xs_patches),
+                                              'right_margin':max(xs_patches)}
 
                 ''' Check for collisions both on text and patches'''
                 if feat_numb not in draw_features:
-                    draw=True
-                    for prev_start,prev_end in line_controller:
+                    draw = True
+                    for prev_start, prev_end in line_controller:
+                        # print("line_controller",prev_start, prev_end, size_memory[feat_numb])
                         if  (prev_start <= size_memory[feat_numb]['left_margin'] <= prev_end) or \
                             (prev_start <= size_memory[feat_numb]['right_margin'] <= prev_end) or \
                             ((size_memory[feat_numb]['left_margin'] < prev_start < size_memory[feat_numb]['right_margin']) and \
@@ -277,18 +307,28 @@ class BaseTrack(object):
                             else:
                                 try:
                                     current_y = patch.get_y()
+                                    patch.set_y(current_y + self.Ycord)
                                 except AttributeError:
-                                    current_y = patch.get_position()[1]
-                                patch.set_y(current_y + self.Ycord)
+                                    if type(patch) is FancyArrowPatch:
+                                        arrow_pos = [list(pos) for pos in patch._posA_posB]
+                                        arrow_pos[0][1] = arrow_pos[0][1] + self.Ycord
+                                        arrow_pos[1][1] = arrow_pos[1][1] + self.Ycord
+                                        patch.set_positions(arrow_pos[0], arrow_pos[1])
+                                    else:
+                                        current_y = patch.get_position()[1]
+                                        patch.set_y(current_y + self.Ycord)
                             
                         for iname, fname in enumerate(feat2draw.feat_name):
                             y=fname.get_position()[1]
                             feat2draw.feat_name[iname].set_y(y + self.Ycord)
-                            current_x, current_y = fname.xytext
-                            feat2draw.feat_name[iname].xytext = (current_x, current_y + self.Ycord)
+                            feat2draw.Y2 = (y + self.Ycord)
+                            #current_x, current_y = fname.xyann
+                            #feat2draw.feat_name[iname].xytext = (current_x, current_y + self.Ycord)
+                            #print("feat_name ",fname,"y",y,"new y",fname.get_position()[1])
                         draw_features.append(feat_numb)
                         
             #if len(draw_features) < len(self.features):
+            
             self.Ycord-=self._betw_feat_space
             line_controller=[]
             self.drawn_lines += 1
@@ -331,7 +371,7 @@ class BaseTrack(object):
         
         return [feat for (i,feat) in feat_list]
         
-    def _draw_ordered_features(self, feat_list = None,):
+    def _draw_ordered_features(self, feat_list=None,):
         '''draws one feature per line in the track in the order they are passed'''
         if not feat_list:
             feat_list = self.features
@@ -357,14 +397,15 @@ class BaseTrack(object):
                         current_y = patch.get_position()[1]
                     patch.set_y(current_y + self.Ycord)
             for iname, fname in enumerate(feat2draw.feat_name):
-                y=fname.get_position()[1]
+                y = fname.get_position()[1]
                 feat2draw.feat_name[iname].set_y(y + self.Ycord)
-                current_x, current_y = fname.xytext
+                #current_x, current_y = fname.xytext
+                current_x, current_y = fname.xyann
                 feat2draw.feat_name[iname].xytext = (current_x , current_y + self.Ycord)
-            self.Ycord-=self._betw_feat_space
+            self.Ycord -= self._betw_feat_space
             self.drawn_lines += 1
 
-    def _draw_features(self, **kwargs):
+    def _draw_features(self, fig=None, **kwargs):
         '''draw features '''
         xoffset = kwargs.get('xoffset',0)
         for feat_numb, feat2draw in enumerate(self.features):
@@ -376,18 +417,22 @@ class BaseTrack(object):
                         feat2draw.ec = feat2draw.fc
                 else:# color by feature number
                     if not feat2draw.cm_value:
-                        self.norm = colors.normalize(1,len(self.features)+1,)
+                        self.norm = colors.Normalize(1,len(self.features)+1,)
                         feat2draw.cm_value = feat_numb +1
                     feat2draw.fc = self.cm(self.norm(feat2draw.cm_value))
-            feat2draw.draw_feature()
-            feat2draw.draw_feat_name(xoffset = xoffset)
+            if False:
+            # if type(feat2draw) in [PrettyTextSequence, TextSequence]:
+                feat2draw.draw_feature(fig=fig)
+            else:
+                feat2draw.draw_feature()
+            feat2draw.draw_feat_name(xoffset=xoffset)
 
             
-    def _sort_features(self, dpi = 80, **kwargs):
+    def _sort_features(self, dpi=80, **kwargs):
         ''' sort features basing on the chosen mode '''
-        self._draw_features(**kwargs)
+        self._draw_features(fig=plt.gcf(), **kwargs)
         if self.sort_by =='collapse':
-            self._collapse(dpi, )
+            self._collapse(dpi)
         elif self.sort_by =='score':
             feat_list = self._order_by_score()
             self._draw_ordered_features(feat_list,)
@@ -396,6 +441,7 @@ class BaseTrack(object):
             self._draw_ordered_features(feat_list, )
         else:
             self._draw_ordered_features()
+            pass
     
         
         
