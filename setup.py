@@ -6,7 +6,7 @@ version = '1.1'
 setup(name='biograpy',
       version=version,
       description="",
-      long_description=open("README.txt").read() + "\n" +
+      long_description=open("README.md").read() + "\n" +
                        open(os.path.join("docs", "HISTORY.txt")).read() + "\n" +
                        open(os.path.join("docs", "AUTHORS.txt")).read(),
       # Get more strings from http://pypi.python.org/pypi?%3Aaction=list_classifiers
@@ -18,8 +18,9 @@ setup(name='biograpy',
       author_email='apierleoni.dev@gmail.com',
       url='',
       license='LGPL',
-      packages=find_packages(exclude=['ez_setup', 'docs', 'tests*']),
-      package_dir={'':'biograpy'},
+	packages =['biograpy'],
+#      packages=find_packages(exclude=['ez_setup', 'docs', 'tests*']),
+#      package_dir={'':'biograpy'},
       namespace_packages=['biograpy'],
       include_package_data=True,
       zip_safe=False,
